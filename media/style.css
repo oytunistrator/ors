@@ -1399,26 +1399,63 @@ body {
 .model-chip {
     appearance: none;
     -webkit-appearance: none;
-    background: transparent;
-    border: none;
-    color: var(--vscode-foreground);
+    background: var(--vscode-badge-background, rgba(128, 128, 128, 0.18));
+    border: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.3));
+    border-radius: 10px;
+    color: var(--vscode-badge-foreground, var(--vscode-foreground));
     font-size: 11px;
     font-family: inherit;
     cursor: pointer;
-    opacity: 0.5;
-    max-width: 90px;
-    min-width: 0;
+    max-width: 120px;
+    min-width: 40px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    padding: 0 2px;
+    padding: 1px 18px 1px 7px;
     flex-shrink: 1;
+    position: relative;
+    transition:
+        opacity 0.15s,
+        border-color 0.15s;
 }
 .model-chip:hover {
-    opacity: 0.9;
+    opacity: 1;
+    border-color: var(--vscode-focusBorder, rgba(128, 128, 128, 0.5));
 }
 .model-chip:focus {
-    outline: none;
+    outline: 1px solid var(--vscode-focusBorder, #007acc);
+    outline-offset: 1px;
+}
+.model-chip option {
+    background: var(
+        --vscode-dropdown-background,
+        var(--vscode-editor-background)
+    );
+    color: var(--vscode-dropdown-foreground, var(--vscode-foreground));
+}
+.model-chip optgroup {
+    background: var(
+        --vscode-dropdown-background,
+        var(--vscode-editor-background)
+    );
+    color: var(--vscode-dropdown-foreground, var(--vscode-foreground));
+}
+/* Model seç dropdown arrow - ::after ile sahte ok */
+.model-chip-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+.model-chip-wrap::after {
+    content: "▾";
+    position: absolute;
+    right: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 7px;
+    pointer-events: none;
+    opacity: 0.5;
+    color: var(--vscode-foreground);
 }
 
 /* ── Ollama host linki (mode picker alt) ─────────────────── */
