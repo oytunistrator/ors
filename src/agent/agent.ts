@@ -29,7 +29,7 @@ export class Agent {
     private readonly approval: ApprovalGate,
     private readonly getConfig: () => AgentConfig,
     private readonly env: { platform: string; shell: string },
-    private readonly getMemories: () => string[] = () => []
+    private readonly getMemories: () => string[] = () => [],
   ) {}
 
   reset(): void {
@@ -38,7 +38,11 @@ export class Agent {
     this.summarizedCount = 0;
   }
 
-  snapshot(): { history: ChatMessage[]; summary: string; summarizedCount: number } {
+  snapshot(): {
+    history: ChatMessage[];
+    summary: string;
+    summarizedCount: number;
+  } {
     return {
       history: this.history,
       summary: this.summary,
@@ -46,7 +50,11 @@ export class Agent {
     };
   }
 
-  restore(s: { history: ChatMessage[]; summary: string; summarizedCount: number }): void {
+  restore(s: {
+    history: ChatMessage[];
+    summary: string;
+    summarizedCount: number;
+  }): void {
     this.history = s.history ?? [];
     this.summary = s.summary ?? "";
     this.summarizedCount = s.summarizedCount ?? 0;
@@ -54,14 +62,14 @@ export class Agent {
 
   private async buildMessages(
     cfg: AgentConfig,
-    token: CancellationToken
+    token: CancellationToken,
   ): Promise<ChatMessage[]> {
     const system = this.systemMessage(cfg.mode);
     const reserve = Math.min(4096, Math.max(1024, Math.floor(cfg.numCtx / 4)));
     const sysTokens = estimateTokens(system.content);
     const budget = Math.max(
       1500,
-      cfg.numCtx - reserve - sysTokens - estimateTokens(this.summary) - 300
+      cfg.numCtx - reserve - sysTokens - estimateTokens(this.summary) - 300,
     );
     let { kept, droppedCount } = fitHistory(this.history, budget);
     if (droppedCount > 0) {
@@ -85,7 +93,7 @@ export class Agent {
   private async updateSummary(
     dropTo: number,
     cfg: AgentConfig,
-    token: CancellationToken
+    token: CancellationToken,
   ): Promise<void> {
     const newly = this.history.slice(this.summarizedCount, dropTo);
     if (newly.length === 0) {
@@ -109,7 +117,9 @@ export class Agent {
     }
   }
 
-  private systemMessage(mode: import("../shared/protocol").AgentMode): ChatMessage {
+  private systemMessage(
+    mode: import("../shared/protocol").AgentMode,
+  ): ChatMessage {
     return {
       role: "system",
       content: buildSystemPrompt({
@@ -124,7 +134,11 @@ export class Agent {
     };
   }
 
-  async run(userText: string, token: CancellationToken, images?: string[]): Promise<void> {
+  async run(
+    userText: string,
+    token: CancellationToken,
+    images?: string[],
+  ): Promise<void> {
     const cfg = this.getConfig();
     this.history.push({ role: "user", content: userText, images });
 
@@ -142,21 +156,45 @@ export class Agent {
         const messages = await this.buildMessages(cfg, token);
         const modeTools = this.registry.forMode(cfg.mode);
         const knownNames = new Set(modeTools.map((t) => t.name));
-        const result = await this.llm.chat({
-          model: cfg.model,
-          messages,
-          tools: this.registry.specs(modeTools),
-          temperature: cfg.temperature,
-          numCtx: cfg.numCtx,
-          token,
-          onToken: (t) => {
-            if (!started) {
-              started = true;
-              this.events.assistantStart();
+
+        // Geçici bağlantı hatalarında otomatik dene (3 kez)
+        let result: import("../llm/types").ChatResult;
+        let chatAttempts = 0;
+        const MAX_CHAT_RETRIES = 3;
+        while (true) {
+          try {
+            result = await this.llm.chat({
+              model: cfg.model,
+              messages,
+              tools: this.registry.specs(modeTools),
+              temperature: cfg.temperature,
+              numCtx: cfg.numCtx,
+              token,
+              onToken: (t) => {
+                if (!started) {
+                  started = true;
+                  this.events.assistantStart();
+                }
+                this.events.assistantToken(t);
+              },
+            });
+            break;
+          } catch (e) {
+            if (
+              started ||
+              e instanceof CancelledError ||
+              chatAttempts >= MAX_CHAT_RETRIES
+            ) {
+              throw e;
             }
-            this.events.assistantToken(t);
-          },
-        });
+            chatAttempts++;
+            this.events.info(
+              `Ollama bağlantı hatası, yeniden deneniyor (${chatAttempts}/${MAX_CHAT_RETRIES})…`,
+            );
+            // Kısa bekle
+            await new Promise((r) => setTimeout(r, 2000 * chatAttempts));
+          }
+        }
         if (started) this.events.assistantEnd();
 
         let toolCalls = result.toolCalls;
@@ -188,16 +226,18 @@ export class Agent {
             refusalNudged = true;
             this.history.push({ role: "user", content: REFUSAL_NUDGE });
             this.events.info(
-              "Model isteği güvenlik gerekçesiyle reddetti; onay kapısı devrede olduğu için yeniden yönlendiriliyor."
+              "Model isteği güvenlik gerekçesiyle reddetti; onay kapısı devrede olduğu için yeniden yönlendiriliyor.",
             );
             continue;
           }
           if (!started && result.content.trim() === "") {
             consecutiveEmptyResponses++;
-            this.events.info(`Model boş yanıt verdi (${consecutiveEmptyResponses}/3).`);
+            this.events.info(
+              `Model boş yanıt verdi (${consecutiveEmptyResponses}/3).`,
+            );
             if (consecutiveEmptyResponses >= 3) {
               this.events.error(
-                "Model 3 tur üst üste boş yanıt verdi. İlerleme sağlanamadı, durduruldu."
+                "Model 3 tur üst üste boş yanıt verdi. İlerleme sağlanamadı, durduruldu.",
               );
               this.events.status("idle");
               return;
@@ -214,11 +254,13 @@ export class Agent {
           .join("|");
         recentSignatures.push(signature);
         if (recentSignatures.length > 6) recentSignatures.shift();
-        const occurrences = recentSignatures.filter((s) => s === signature).length;
+        const occurrences = recentSignatures.filter(
+          (s) => s === signature,
+        ).length;
         if (occurrences >= 3) {
           this.events.error(
             "Ajan aynı işlemleri tekrarlayıp ilerleyemiyor, durduruldu. " +
-              "Model bu görevi çözemedi olabilir; daha güçlü bir model dene."
+              "Model bu görevi çözemedi olabilir; daha güçlü bir model dene.",
           );
           this.events.status("idle");
           return;
@@ -234,14 +276,14 @@ export class Agent {
         if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
           this.events.error(
             `Ajan ${MAX_CONSECUTIVE_FAILURES} turdur ilerleyemedi, durduruldu. ` +
-              `İstek çok karmaşık olabilir veya model araçları yanlış kullanıyor.`
+              `İstek çok karmaşık olabilir veya model araçları yanlış kullanıyor.`,
           );
           this.events.status("idle");
           return;
         }
       }
       this.events.error(
-        `Maksimum iterasyon (${cfg.maxIterations}) aşıldı. Görev tamamlanmamış olabilir.`
+        `Maksimum iterasyon (${cfg.maxIterations}) aşıldı. Görev tamamlanmamış olabilir.`,
       );
       this.events.status("idle");
     } catch (err) {
@@ -258,27 +300,38 @@ export class Agent {
   private async executeTool(
     call: { id: string; name: string; arguments: Record<string, unknown> },
     cfg: AgentConfig,
-    token: CancellationToken
+    token: CancellationToken,
   ): Promise<boolean> {
     const tool = this.registry.get(call.name);
     if (!tool) {
-      this.events.toolStart(call.id, call.name, `Bilinmeyen araç: ${call.name}`);
+      this.events.toolStart(
+        call.id,
+        call.name,
+        `Bilinmeyen araç: ${call.name}`,
+      );
       this.events.toolEnd(call.id, false, "yok");
       this.pushToolResult(call.name, `Hata: '${call.name}' diye bir araç yok.`);
       return false;
     }
 
-    if (cfg.mode === "plan" && (tool.category === "write" || tool.category === "command")) {
+    if (
+      cfg.mode === "plan" &&
+      (tool.category === "write" || tool.category === "command")
+    ) {
       this.events.toolStart(call.id, tool.name, "plan modu");
       this.events.toolEnd(call.id, false, "plan modunda engellendi");
       this.pushToolResult(
         tool.name,
-        "PLAN modundasın; dosya değiştiremez/komut çalıştıramazsın. Planı yaz ve kullanıcıdan modu değiştirmesini iste."
+        "PLAN modundasın; dosya değiştiremez/komut çalıştıramazsın. Planı yaz ve kullanıcıdan modu değiştirmesini iste.",
       );
       return false;
     }
 
-    this.events.toolStart(call.id, tool.name, safe(() => tool.summarize(call.arguments)));
+    this.events.toolStart(
+      call.id,
+      tool.name,
+      safe(() => tool.summarize(call.arguments)),
+    );
 
     let autoApproved: boolean;
     if (cfg.mode === "act" || cfg.mode === "auto") {
@@ -286,7 +339,11 @@ export class Agent {
     } else {
       autoApproved = cfg.autoApprove[tool.category] === true;
       if (!autoApproved && tool.name === "run_command") {
-        autoApproved = commandAutoApproved(String(call.arguments.command ?? ""), cfg, this.env.platform);
+        autoApproved = commandAutoApproved(
+          String(call.arguments.command ?? ""),
+          cfg,
+          this.env.platform,
+        );
       }
     }
     if (!autoApproved) {
@@ -298,18 +355,25 @@ export class Agent {
               kind: "text" as const,
               text: JSON.stringify(call.arguments, null, 2),
             };
-        const approved = await this.approval.request(tool.name, call.arguments, preview);
+        const approved = await this.approval.request(
+          tool.name,
+          call.arguments,
+          preview,
+        );
         if (!approved) {
           this.events.toolEnd(call.id, false, "reddedildi");
           this.pushToolResult(
             tool.name,
-            "Kullanıcı bu işlemi reddetti. Farklı bir yaklaşım dene veya kullanıcıya sor."
+            "Kullanıcı bu işlemi reddetti. Farklı bir yaklaşım dene veya kullanıcıya sor.",
           );
           return false;
         }
       } catch (err) {
         this.events.toolEnd(call.id, false, "önizleme hatası");
-        this.pushToolResult(tool.name, `Önizleme hatası: ${(err as Error).message}`);
+        this.pushToolResult(
+          tool.name,
+          `Önizleme hatası: ${(err as Error).message}`,
+        );
         return false;
       }
     }
@@ -319,13 +383,20 @@ export class Agent {
     if (missing.length > 0) {
       const detail = `eksik parametre: ${missing.join(", ")}`;
       this.events.toolEnd(call.id, false, detail);
-      this.pushToolResult(tool.name, `Hata: ${detail}. Gerekli alanlar: ${required.join(", ")}.`);
+      this.pushToolResult(
+        tool.name,
+        `Hata: ${detail}. Gerekli alanlar: ${required.join(", ")}.`,
+      );
       return false;
     }
 
     try {
       const res = await tool.invoke(call.arguments, this.ctx, token);
-      this.events.toolEnd(call.id, res.ok, res.detail ?? (res.ok ? "tamam" : "hata"));
+      this.events.toolEnd(
+        call.id,
+        res.ok,
+        res.detail ?? (res.ok ? "tamam" : "hata"),
+      );
       this.pushToolResult(tool.name, res.content);
       return res.ok;
     } catch (err) {
@@ -357,18 +428,52 @@ const EMPTY_RESPONSE_NUDGE =
   "gerekli araç çağrılarını yap. Yanıtın boş olursa işlem devam edemez.";
 
 const REFUSAL_MARKERS = [
-  "yapamam", "yapamıyorum", "yapamayacağım", "edemem", "edemiyorum", "redded",
-  "gerçekleştiremem", "çalıştıramam", "silemem", "değiştiremem", "yetkim yok",
-  "izin veremem", "uygun değil", "yapmam doğru olmaz",
-  "i can't", "i cannot", "i can not", "i won't", "i will not", "i'm not able",
-  "i am not able", "unable to", "not able to", "cannot assist", "can't help",
-  "i must decline", "i refuse",
+  "yapamam",
+  "yapamıyorum",
+  "yapamayacağım",
+  "edemem",
+  "edemiyorum",
+  "redded",
+  "gerçekleştiremem",
+  "çalıştıramam",
+  "silemem",
+  "değiştiremem",
+  "yetkim yok",
+  "izin veremem",
+  "uygun değil",
+  "yapmam doğru olmaz",
+  "i can't",
+  "i cannot",
+  "i can not",
+  "i won't",
+  "i will not",
+  "i'm not able",
+  "i am not able",
+  "unable to",
+  "not able to",
+  "cannot assist",
+  "can't help",
+  "i must decline",
+  "i refuse",
 ];
 
 const SECURITY_MARKERS = [
-  "güvenlik", "izin", "yetki", "riskli", "tehlikeli", "zarar", "sakıncalı",
-  "güvenli değil", "security", "permission", "not allowed", "unsafe",
-  "dangerous", "risk", "harm", "safety",
+  "güvenlik",
+  "izin",
+  "yetki",
+  "riskli",
+  "tehlikeli",
+  "zarar",
+  "sakıncalı",
+  "güvenli değil",
+  "security",
+  "permission",
+  "not allowed",
+  "unsafe",
+  "dangerous",
+  "risk",
+  "harm",
+  "safety",
 ];
 
 function isSecurityRefusal(text: string): boolean {
@@ -393,7 +498,11 @@ function injectionRegex(_platform: string): RegExp {
   return INJECTION_RE;
 }
 
-function commandAutoApproved(command: string, cfg: AgentConfig, platform: string = process.platform): boolean {
+function commandAutoApproved(
+  command: string,
+  cfg: AgentConfig,
+  platform: string = process.platform,
+): boolean {
   const cmd = command.trim();
   if (!cmd) return false;
   if (injectionRegex(platform).test(cmd)) return false;
