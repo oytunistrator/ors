@@ -12,7 +12,9 @@
   const modePicker = $("modePicker");
   const effortLabel = $("effortLabel");
   const todosEl = $("todos");
-  const modelSelect = /** @type {HTMLSelectElement} */ ($("modelSelect"));
+  const modelSelectBtn = $("modelSelectBtn");
+  const modelDropdown = $("modelDropdown");
+  const modelList = $("modelList");
   const hostBtn = $("hostBtn");
   const statusChip = $("statusChip");
   const ctxChip = $("ctxChip");
@@ -29,6 +31,7 @@
   const emptyState = $("emptyState");
   const emptyModeCard = $("emptyModeCard");
   const sessionTitle = $("sessionTitle");
+  const serverIndicator = $("serverIndicator");
   let currentMode = "act";
   let currentEffort = "medium";
   let isBusy = false;
@@ -43,8 +46,6 @@
   let streamingThought = null;
   /** @type {HTMLElement | null} */
   let statusRow = null;
-  let statusTimer = null;
-  let statusStart = 0;
   /** @type {number | null} */
   let thinkStartTime = null;
   /** @type {number | null} */
@@ -63,7 +64,9 @@
     e.stopPropagation();
     attachMenu.hidden = !attachMenu.hidden;
   });
-  document.addEventListener("click", () => { attachMenu.hidden = true; });
+  document.addEventListener("click", () => {
+    attachMenu.hidden = true;
+  });
   attachMenu.addEventListener("click", (e) => e.stopPropagation());
 
   $("attachFile").addEventListener("click", () => {
@@ -87,13 +90,15 @@
   function clearAttachment() {
     pendingAttachment = null;
     attachedCtx.hidden = true;
-    while (attachedCtx.firstChild) attachedCtx.removeChild(attachedCtx.firstChild);
+    while (attachedCtx.firstChild)
+      attachedCtx.removeChild(attachedCtx.firstChild);
   }
 
   function setImageAttachment(name, content, dataUrl) {
     pendingAttachment = { label: name, content, dataUrl };
     attachedCtx.hidden = false;
-    while (attachedCtx.firstChild) attachedCtx.removeChild(attachedCtx.firstChild);
+    while (attachedCtx.firstChild)
+      attachedCtx.removeChild(attachedCtx.firstChild);
     const img = document.createElement("img");
     img.src = dataUrl;
     img.className = "attach-img-preview";
@@ -114,7 +119,8 @@
   function setAttachment(label, content) {
     pendingAttachment = { label, content };
     attachedCtx.hidden = false;
-    while (attachedCtx.firstChild) attachedCtx.removeChild(attachedCtx.firstChild);
+    while (attachedCtx.firstChild)
+      attachedCtx.removeChild(attachedCtx.firstChild);
     const tag = document.createElement("span");
     tag.className = "attach-tag";
     tag.textContent = label;
@@ -134,7 +140,10 @@
     let images;
     if (pendingAttachment) {
       if (pendingAttachment.dataUrl) {
-        const b64 = pendingAttachment.dataUrl.replace(/^data:[^;]+;base64,/, "");
+        const b64 = pendingAttachment.dataUrl.replace(
+          /^data:[^;]+;base64,/,
+          "",
+        );
         if (b64) images = [b64];
         const note = `[Görsel: ${pendingAttachment.label}]`;
         text = text ? note + "\n" + text : note;
@@ -203,8 +212,9 @@
       }
     });
   }
-  newChatBtn.addEventListener("click", () => vscode.postMessage({ type: "newChat" }));
-  $("exportBtn").addEventListener("click", () => vscode.postMessage({ type: "exportChat" }));
+  newChatBtn.addEventListener("click", () =>
+    vscode.postMessage({ type: "newChat" }),
+  );
   if (historyBtn) {
     historyBtn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -219,15 +229,21 @@
       }
     });
     chatsPanel.addEventListener("click", (e) => e.stopPropagation());
-    chatsSearch.addEventListener("input", () => renderChatsList(chatsSearch.value));
-    document.addEventListener("click", () => { chatsPanel.hidden = true; });
+    chatsSearch.addEventListener("input", () =>
+      renderChatsList(chatsSearch.value),
+    );
+    document.addEventListener("click", () => {
+      chatsPanel.hidden = true;
+    });
   }
 
   modePickerBtn.addEventListener("click", (e) => {
     e.stopPropagation();
     modePicker.hidden = !modePicker.hidden;
   });
-  document.addEventListener("click", () => { modePicker.hidden = true; });
+  document.addEventListener("click", () => {
+    modePicker.hidden = true;
+  });
   modePicker.addEventListener("click", (e) => e.stopPropagation());
 
   document.querySelectorAll(".mode-option").forEach((btn) => {
@@ -245,7 +261,8 @@
   if (effortSlider) {
     effortSlider.addEventListener("click", (e) => {
       const rect = effortSlider.getBoundingClientRect();
-      const ratio = (/** @type {MouseEvent} */ (e).clientX - rect.left) / rect.width;
+      const ratio =
+        /** @type {MouseEvent} */ (e.clientX - rect.left) / rect.width;
       const effort = EFFORT_ORDER[ratio < 0.34 ? 0 : ratio < 0.67 ? 1 : 2];
       currentEffort = effort;
       updateEffortUI(effort);
@@ -273,8 +290,24 @@
     inputEl.style.height = Math.min(inputEl.scrollHeight, 160) + "px";
   }
 
-  modelSelect.addEventListener("change", () => {
-    vscode.postMessage({ type: "selectModel", model: modelSelect.value });
+  modelSelectBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    modelDropdown.hidden = !modelDropdown.hidden;
+  });
+  document.addEventListener("click", () => {
+    modelDropdown.hidden = true;
+  });
+  modelDropdown.addEventListener("click", (e) => e.stopPropagation());
+
+  modelList.addEventListener("click", (e) => {
+    const btn = /** @type {HTMLElement} */ (e.target).closest(".model-opt");
+    if (!btn) return;
+    const model = btn.dataset.model;
+    if (model) {
+      modelDropdown.hidden = true;
+      modelSelectBtn.textContent = model;
+      vscode.postMessage({ type: "selectModel", model });
+    }
   });
 
   hostBtn.addEventListener("click", () => {
@@ -291,17 +324,61 @@
    */
   /** @type {PaletteGroup[]} */
   const PALETTE_GROUPS = [
-    { group: "Context", items: [
-      { label: "Attach file…", act: () => vscode.postMessage({ type: "openFilePicker" }) },
-      { label: "Add editor context…", act: () => vscode.postMessage({ type: "getEditorContext" }) },
-      { label: "Clear conversation", act: () => vscode.postMessage({ type: "newChat" }) },
-      { label: "Undo last change", act: () => vscode.postMessage({ type: "undo" }) },
-    ]},
-    { group: "Model", items: [
-      { label: "Switch model…", right: () => modelSelect.value || "", act: () => modelSelect.focus() },
-      { label: "Change mode…", right: () => currentMode, act: () => { modePicker.hidden = false; } },
-      { label: "Adjust effort…", right: () => currentEffort, act: () => { modePicker.hidden = false; } },
-    ]},
+    {
+      group: "Context",
+      items: [
+        {
+          label: "Attach file…",
+          act: () => vscode.postMessage({ type: "openFilePicker" }),
+        },
+        {
+          label: "Add editor context…",
+          act: () => vscode.postMessage({ type: "getEditorContext" }),
+        },
+        {
+          label: "Clear conversation",
+          act: () => vscode.postMessage({ type: "newChat" }),
+        },
+        {
+          label: "Undo last change",
+          act: () => vscode.postMessage({ type: "undo" }),
+        },
+      ],
+    },
+    {
+      group: "Model",
+      items: [
+        {
+          label: "Switch model…",
+          right: () => modelSelectBtn.textContent || "",
+          act: () => {
+            modelDropdown.hidden = !modelDropdown.hidden;
+          },
+        },
+        {
+          label: "Change mode…",
+          right: () => currentMode,
+          act: () => {
+            modePicker.hidden = false;
+          },
+        },
+        {
+          label: "Adjust effort…",
+          right: () => currentEffort,
+          act: () => {
+            modePicker.hidden = false;
+          },
+        },
+        {
+          label: "Manage hosts…",
+          right: () =>
+            hostBtn.textContent === "localhost" ? "local" : hostBtn.textContent,
+          act: () => {
+            vscode.postMessage({ type: "manageHosts" });
+          },
+        },
+      ],
+    },
   ];
 
   /** @type {{ el: HTMLElement; act: () => void }[]} */
@@ -314,7 +391,9 @@
     cmdPalette.hidden = false;
     cmdFilter.focus();
   }
-  function closeCmdPalette() { cmdPalette.hidden = true; }
+  function closeCmdPalette() {
+    cmdPalette.hidden = true;
+  }
 
   /** @param {string} query */
   function buildCmdPalette(query) {
@@ -322,7 +401,9 @@
     cmdList.innerHTML = "";
     paletteItems = [];
     for (const g of PALETTE_GROUPS) {
-      const matched = g.items.filter((it) => it.label.toLowerCase().includes(q));
+      const matched = g.items.filter((it) =>
+        it.label.toLowerCase().includes(q),
+      );
       if (!matched.length) continue;
       const gl = document.createElement("div");
       gl.className = "cmd-group";
@@ -343,7 +424,10 @@
         }
         const idx = paletteItems.length;
         row.addEventListener("click", () => runCmdPalette(idx));
-        row.addEventListener("mousemove", () => { paletteSel = idx; highlightCmdPalette(); });
+        row.addEventListener("mousemove", () => {
+          paletteSel = idx;
+          highlightCmdPalette();
+        });
         cmdList.appendChild(row);
         paletteItems.push({ el: row, act: it.act });
       }
@@ -353,7 +437,9 @@
   }
 
   function highlightCmdPalette() {
-    paletteItems.forEach((p, i) => p.el.classList.toggle("sel", i === paletteSel));
+    paletteItems.forEach((p, i) =>
+      p.el.classList.toggle("sel", i === paletteSel),
+    );
     const cur = paletteItems[paletteSel];
     if (cur) cur.el.scrollIntoView({ block: "nearest" });
   }
@@ -368,51 +454,62 @@
 
   cmdFilter.addEventListener("input", () => buildCmdPalette(cmdFilter.value));
   cmdFilter.addEventListener("keydown", (e) => {
-    if (e.key === "ArrowDown") { e.preventDefault(); paletteSel = Math.min(paletteSel + 1, paletteItems.length - 1); highlightCmdPalette(); }
-    else if (e.key === "ArrowUp") { e.preventDefault(); paletteSel = Math.max(paletteSel - 1, 0); highlightCmdPalette(); }
-    else if (e.key === "Enter") { e.preventDefault(); runCmdPalette(paletteSel); }
-    else if (e.key === "Escape") { e.preventDefault(); closeCmdPalette(); }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      paletteSel = Math.min(paletteSel + 1, paletteItems.length - 1);
+      highlightCmdPalette();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      paletteSel = Math.max(paletteSel - 1, 0);
+      highlightCmdPalette();
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      runCmdPalette(paletteSel);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      closeCmdPalette();
+    }
   });
-  cmdPalette.addEventListener("click", (e) => { if (e.target === cmdPalette) closeCmdPalette(); });
+  cmdPalette.addEventListener("click", (e) => {
+    if (e.target === cmdPalette) closeCmdPalette();
+  });
 
   slashBtn.addEventListener("click", () => openCmdPalette());
   document.addEventListener("keydown", (e) => {
     if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K")) {
       e.preventDefault();
-      if (cmdPalette.hidden) openCmdPalette(); else closeCmdPalette();
+      if (cmdPalette.hidden) openCmdPalette();
+      else closeCmdPalette();
     }
   });
 
   messagesEl.addEventListener("click", (e) => {
-    const link = /** @type {Element} */ (e.target).closest(".file-link");
-    if (link instanceof HTMLElement) {
-      vscode.postMessage({
-        type: "openFile",
-        path: link.dataset.path,
-        line: Number(link.dataset.line) || undefined,
-      });
-      return;
-    }
     const btn = /** @type {Element} */ (e.target).closest(".copy-btn");
     if (!btn) return;
-    const src = btn.closest(".code-block")?.querySelector("code")
-      || btn.closest(".tool-out")?.querySelector("pre");
-    if (!src) return;
-    const text = src.textContent ?? "";
-    navigator.clipboard.writeText(text).then(() => {
-      btn.textContent = "✓";
-      setTimeout(() => { btn.textContent = "Copy"; }, 1500);
-    }).catch(() => {
-      const ta = document.createElement("textarea");
-      ta.value = text;
-      ta.style.cssText = "position:fixed;opacity:0";
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand("copy");
-      document.body.removeChild(ta);
-      btn.textContent = "✓";
-      setTimeout(() => { btn.textContent = "Copy"; }, 1500);
-    });
+    const codeEl = btn.closest(".code-block")?.querySelector("code");
+    if (!codeEl) return;
+    const text = codeEl.textContent ?? "";
+    navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        btn.textContent = "✓";
+        setTimeout(() => {
+          btn.textContent = "Copy";
+        }, 1500);
+      })
+      .catch(() => {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.cssText = "position:fixed;opacity:0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+        btn.textContent = "✓";
+        setTimeout(() => {
+          btn.textContent = "Copy";
+        }, 1500);
+      });
   });
 
   window.addEventListener("message", (event) => {
@@ -430,11 +527,6 @@
         break;
       case "userMessage":
         addMessage("user", m.text);
-        break;
-      case "prefill":
-        inputEl.value = m.text;
-        autoGrow();
-        inputEl.focus();
         break;
       case "assistantStart":
         startAssistant();
@@ -500,6 +592,12 @@
       case "editorContext":
         setAttachment(m.filename, m.content);
         break;
+      case "serverStatus":
+        updateServerStatus(m.status, m.host, m.error);
+        break;
+      case "hosts":
+        updateHostBtn(m.current);
+        break;
     }
     scrollToBottom();
   });
@@ -538,33 +636,48 @@
   }
 
   function fillModels(models, current) {
-    modelSelect.innerHTML = "";
+    modelList.innerHTML = "";
     if (!models.length) {
-      const o = document.createElement("option");
-      o.value = "";
-      o.textContent = "(model yok — Ollama?)";
-      modelSelect.appendChild(o);
+      modelSelectBtn.textContent = "(model yok)";
       return;
     }
     for (const name of models) {
-      const o = document.createElement("option");
-      o.value = name;
-      o.textContent = name;
-      if (name === current) o.selected = true;
-      modelSelect.appendChild(o);
+      const btn = document.createElement("button");
+      btn.className = "model-opt" + (name === current ? " selected" : "");
+      btn.dataset.model = name;
+      btn.textContent = name;
+      if (name === current) {
+        modelSelectBtn.textContent = name;
+      }
+      modelList.appendChild(btn);
     }
     if (!current || !models.includes(current)) {
-      modelSelect.value = models[0];
-      vscode.postMessage({ type: "selectModel", model: models[0] });
+      const first = models[0];
+      modelSelectBtn.textContent = first;
+      vscode.postMessage({ type: "selectModel", model: first });
+    }
+  }
+
+  function updateServerStatus(status, host, error) {
+    if (!serverIndicator) return;
+    serverIndicator.className = "server-indicator " + status;
+    if (status === "online") {
+      serverIndicator.title = "✅ Sunucu çevrimiçi: " + host;
+    } else if (status === "offline") {
+      serverIndicator.title =
+        "❌ Sunucu çevrimdışı: " + host + (error ? " — " + error : "");
+    } else {
+      serverIndicator.title = "⏳ Sunucu durumu kontrol ediliyor: " + host;
     }
   }
 
   function updateHostBtn(hostUrl) {
     try {
       const u = new URL(hostUrl);
-      hostBtn.textContent = u.hostname === "localhost" || u.hostname === "127.0.0.1"
-        ? "localhost"
-        : u.hostname;
+      hostBtn.textContent =
+        u.hostname === "localhost" || u.hostname === "127.0.0.1"
+          ? "localhost"
+          : u.hostname;
       hostBtn.title = `Ollama host: ${hostUrl} — değiştirmek için tıkla`;
     } catch {
       hostBtn.textContent = "host";
@@ -600,9 +713,10 @@
       ctxChip.hidden = true;
       return;
     }
-    ctxChip.textContent = "● " + pct + "% used";
+    ctxChip.textContent = "\u25CF " + pct + "% used";
     ctxChip.hidden = false;
-    ctxChip.className = "chip" + (pct >= 90 ? " ctx-danger" : pct >= 70 ? " ctx-warn" : "");
+    ctxChip.className =
+      "chip" + (pct >= 90 ? " ctx-danger" : pct >= 70 ? " ctx-warn" : "");
   }
 
   function addMessage(role, text) {
@@ -643,21 +757,16 @@
       statusRow.appendChild(ast);
       statusRow.appendChild(txt);
     }
-    /** @type {HTMLElement} */ (statusRow.querySelector(".status-txt")).textContent = label;
+    /** @type {HTMLElement} */ (
+      statusRow.querySelector(".status-txt")
+    ).textContent = label;
     messagesEl.appendChild(statusRow);
-    if (!statusTimer) {
-      statusStart = Date.now();
-      statusTimer = setInterval(() => {
-        if (!statusRow) return;
-        const t = statusRow.querySelector(".status-txt");
-        const secs = Math.floor((Date.now() - statusStart) / 1000);
-        if (t) t.textContent = `${label} ${secs}s`;
-      }, 1000);
-    }
   }
   function removeStatusRow() {
-    if (statusTimer) { clearInterval(statusTimer); statusTimer = null; }
-    if (statusRow) { statusRow.remove(); statusRow = null; }
+    if (statusRow) {
+      statusRow.remove();
+      statusRow = null;
+    }
   }
 
   function startAssistant() {
@@ -678,12 +787,15 @@
     if (thinkStartTime && !thinkEndTime && streamingRaw.includes("</think>")) {
       thinkEndTime = Date.now();
     }
-    const elapsedSecs = (thinkStartTime && thinkEndTime)
-      ? Math.round((thinkEndTime - thinkStartTime) / 1000)
-      : null;
+    const elapsedSecs =
+      thinkStartTime && thinkEndTime
+        ? Math.round((thinkEndTime - thinkStartTime) / 1000)
+        : null;
     const split = splitThink(streamingRaw);
     updateThoughtRow(split, elapsedSecs);
-    /** @type {HTMLElement} */ (streamingBubble).innerHTML = renderMarkdown(split.body);
+    /** @type {HTMLElement} */ (streamingBubble).innerHTML = renderMarkdown(
+      split.body,
+    );
   }
   function endAssistant() {
     if (streamingBubble) streamingBubble.classList.remove("typing");
@@ -691,7 +803,10 @@
     streamingThought = null;
   }
   function discardAssistant() {
-    if (streamingThought) { streamingThought.row.remove(); streamingThought = null; }
+    if (streamingThought) {
+      streamingThought.row.remove();
+      streamingThought = null;
+    }
     if (streamingBubble) {
       const wrap = streamingBubble.closest(".msg");
       if (wrap) wrap.remove();
@@ -728,13 +843,18 @@
    */
   function updateThoughtRow(split, elapsedSecs) {
     if (!split.hasThink) {
-      if (streamingThought) { streamingThought.row.remove(); streamingThought = null; }
+      if (streamingThought) {
+        streamingThought.row.remove();
+        streamingThought = null;
+      }
       return;
     }
     if (!streamingThought) {
       const row = document.createElement("div");
       row.className = "thought";
-      const det = /** @type {HTMLDetailsElement} */ (document.createElement("details"));
+      const det = /** @type {HTMLDetailsElement} */ (
+        document.createElement("details")
+      );
       det.className = "think-block";
       const sum = document.createElement("summary");
       const pre = document.createElement("pre");
@@ -748,20 +868,13 @@
     }
     streamingThought.pre.textContent = split.thought;
     if (split.closed) {
-      streamingThought.sum.textContent = elapsedSecs != null ? `Thought for ${elapsedSecs}s` : "Thought";
+      streamingThought.sum.textContent =
+        elapsedSecs != null ? `Thought for ${elapsedSecs}s` : "Thought";
       streamingThought.det.open = false;
     } else {
       streamingThought.sum.textContent = "Thinking…";
       streamingThought.det.open = true;
     }
-  }
-
-  function linkifyPaths(text) {
-    return esc(text).replace(
-      /\b([\w.\-\/\\]*[\w\-]\.[A-Za-z]\w{0,5}):(\d+)\b/g,
-      (mm, p, ln) =>
-        `<span class="file-link" data-path="${p.replace(/"/g, "&quot;")}" data-line="${ln}">${mm}</span>`
-    );
   }
 
   function makeCopyBlock(text) {
@@ -815,13 +928,9 @@
     outDet.className = "tool-out";
     const outSum = document.createElement("summary");
     outSum.textContent = "OUT";
-    const outCopy = document.createElement("button");
-    outCopy.className = "copy-btn";
-    outCopy.textContent = "Copy";
     const outPre = document.createElement("pre");
-    outPre.innerHTML = linkifyPaths(detail || (ok ? "done" : "error"));
+    outPre.textContent = detail || (ok ? "done" : "error");
     outDet.appendChild(outSum);
-    outDet.appendChild(outCopy);
     outDet.appendChild(outPre);
     card.appendChild(outDet);
 
@@ -887,9 +996,16 @@
 
     const optDefs = [{ label: "Yes", kbd: "⏎", choice: "yes" }];
     if (m.tool === "run_command") {
-      optDefs.push({ label: `Yes, and don't ask again for ${m.tool}`, choice: "remember" });
+      optDefs.push({
+        label: `Yes, and don't ask again for ${m.tool}`,
+        choice: "remember",
+      });
     }
-    optDefs.push({ label: "No, and tell Örs what to do differently", kbd: "Esc", choice: "no" });
+    optDefs.push({
+      label: "No, and tell Örs what to do differently",
+      kbd: "Esc",
+      choice: "no",
+    });
 
     optDefs.forEach((d, i) => {
       const btn = document.createElement("button");
@@ -911,8 +1027,13 @@
     const onKey = (e) => {
       const tag = e.target && e.target.tagName;
       if (tag === "TEXTAREA" || tag === "INPUT") return;
-      if (e.key === "Enter") { e.preventDefault(); respond("yes"); }
-      else if (e.key === "Escape") { e.preventDefault(); respond("no"); }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        respond("yes");
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        respond("no");
+      }
     };
     document.addEventListener("keydown", onKey);
 
@@ -1002,7 +1123,9 @@
     add.className = "tab-new";
     add.title = "Yeni sekme";
     add.textContent = "＋";
-    add.addEventListener("click", () => vscode.postMessage({ type: "newChat" }));
+    add.addEventListener("click", () =>
+      vscode.postMessage({ type: "newChat" }),
+    );
     tabbar.appendChild(add);
   }
 
@@ -1010,7 +1133,9 @@
   function renderChatsList(filter) {
     const q = (filter || "").trim().toLowerCase();
     chatsList.innerHTML = "";
-    const matches = allSessions.filter((s) => !q || s.name.toLowerCase().includes(q));
+    const matches = allSessions.filter(
+      (s) => !q || s.name.toLowerCase().includes(q),
+    );
     if (matches.length === 0) {
       const empty = document.createElement("div");
       empty.className = "chats-empty";
@@ -1087,8 +1212,13 @@
       }
     };
     input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") { e.preventDefault(); finish(true); }
-      else if (e.key === "Escape") { e.preventDefault(); finish(false); }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        finish(true);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        finish(false);
+      }
     });
     input.addEventListener("blur", () => finish(true));
     input.addEventListener("click", (e) => e.stopPropagation());
@@ -1142,14 +1272,20 @@
     currentMode = mode;
     if (effort) currentEffort = effort;
     const icons = { manual: "✋", act: "</>", plan: "📋", auto: "⚡" };
-    const labels = { manual: "Manual", act: "Edit automatically", plan: "Plan mode", auto: "Auto mode" };
+    const labels = {
+      manual: "Manual",
+      act: "Edit automatically",
+      plan: "Plan mode",
+      auto: "Auto mode",
+    };
     const descs = {
       manual: "Ask for approval before making each edit",
       act: "Edit selected text or the whole file without asking",
       plan: "Explore the code and present a plan before editing",
       auto: "Run everything automatically without asking",
     };
-    modePickerBtn.textContent = (icons[mode] || "⚡") + " " + (labels[mode] || mode);
+    modePickerBtn.textContent =
+      (icons[mode] || "⚡") + " " + (labels[mode] || mode);
     if (emptyModeCard) {
       emptyModeCard.hidden = false;
       emptyModeCard.innerHTML =
@@ -1177,7 +1313,11 @@
     const rows = items
       .map((t) => {
         const icon =
-          t.status === "completed" ? "✓" : t.status === "in_progress" ? "▸" : "○";
+          t.status === "completed"
+            ? "✓"
+            : t.status === "in_progress"
+              ? "▸"
+              : "○";
         return `<div class="todo ${t.status}"><span class="ti">${icon}</span>${esc(t.content)}</div>`;
       })
       .join("");

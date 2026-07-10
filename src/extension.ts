@@ -1,20 +1,27 @@
 import * as vscode from "vscode";
 import { OllamaClient } from "./llm/ollamaClient";
-import { ToolRegistry, defaultTools, buildDynamicTools } from "./tools/registry";
+import {
+  ToolRegistry,
+  defaultTools,
+  buildDynamicTools,
+} from "./tools/registry";
 import { ChatViewProvider } from "./webview/chatViewProvider";
 import { NativeDiffService } from "./webview/nativeDiff";
 import { ProcessManager } from "./services/processManager";
 import { MemoryStore } from "./services/memoryStore";
 import { ProjectMemoryStore } from "./services/projectMemoryStore";
 import { TaskScheduler } from "./services/taskScheduler";
+import { ServerMonitor } from "./services/serverMonitor";
 import type { MCPClient } from "./services/mcpClient";
 
 export function activate(context: vscode.ExtensionContext): void {
-  const llm = new OllamaClient(() =>
+  const getBaseUrl = () =>
     vscode.workspace
       .getConfiguration("ors")
-      .get<string>("baseUrl", "http://localhost:11434")
-  );
+      .get<string>("baseUrl", "http://localhost:11434");
+
+  const llm = new OllamaClient(getBaseUrl);
+  const monitor = new ServerMonitor(getBaseUrl);
 
   const scheduler = new TaskScheduler();
   const mcpClients = new Map<string, MCPClient>();
@@ -44,45 +51,41 @@ export function activate(context: vscode.ExtensionContext): void {
     processes,
     memory,
     projectMemory,
-    scheduler
+    monitor,
+    scheduler,
   );
-
-  const statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-  statusItem.text = "$(tools) Örs";
-  statusItem.tooltip = "Örs panelini aç";
-  statusItem.command = "ors.focus";
-  statusItem.show();
 
   context.subscriptions.push(
-    statusItem,
     diff.register(),
+    monitor,
     { dispose: () => processes.disposeAll() },
     { dispose: () => scheduler.disposeAll() },
-    { dispose: () => { for (const c of mcpClients.values()) c.disconnect(); } },
-    vscode.commands.registerCommand("ors.setHost", () => provider.setHostCommand()),
-    vscode.window.registerWebviewViewProvider(ChatViewProvider.viewId, provider, {
-      webviewOptions: { retainContextWhenHidden: true },
-    }),
+    {
+      dispose: () => {
+        for (const c of mcpClients.values()) c.disconnect();
+      },
+    },
+    vscode.commands.registerCommand("ors.setHost", () =>
+      provider.setHostCommand(),
+    ),
+    vscode.commands.registerCommand("ors.manageHosts", () =>
+      provider.manageHostsCommand(),
+    ),
+    vscode.window.registerWebviewViewProvider(
+      ChatViewProvider.viewId,
+      provider,
+      {
+        webviewOptions: { retainContextWhenHidden: true },
+      },
+    ),
     vscode.commands.registerCommand("ors.newChat", () =>
-      provider.newChatCommand()
+      provider.newChatCommand(),
     ),
-    vscode.commands.registerCommand("ors.undo", () =>
-      provider.undoCommand()
-    ),
+    vscode.commands.registerCommand("ors.undo", () => provider.undoCommand()),
     vscode.commands.registerCommand("ors.focus", () =>
-      vscode.commands.executeCommand("ors.chat.focus")
+      vscode.commands.executeCommand("ors.chat.focus"),
     ),
-    vscode.commands.registerCommand("ors.explainSelection", () =>
-      provider.actOnSelection("explain")
-    ),
-    vscode.commands.registerCommand("ors.fixSelection", () =>
-      provider.actOnSelection("fix")
-    ),
-    vscode.commands.registerCommand("ors.sendSelection", () =>
-      provider.actOnSelection("send")
-    )
   );
 }
 
-export function deactivate(): void {
-}
+export function deactivate(): void {}

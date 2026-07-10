@@ -1,8 +1,10 @@
 node_modules/
 out/
 dist/
-e2e/
+e2e/run.js
+e2e/*.run.js
 e2e-*.txt
+*.vsix
 .DS_Store
 *.log
 .claude/

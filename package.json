@@ -56,40 +56,16 @@
         "icon": "$(server)"
       },
       {
+        "command": "ors.manageHosts",
+        "title": "Örs: Host Yönetimi",
+        "icon": "$(server)"
+      },
+      {
         "command": "ors.focus",
         "title": "Örs: Paneli Aç"
-      },
-      {
-        "command": "ors.explainSelection",
-        "title": "Örs: Seçili kodu açıkla"
-      },
-      {
-        "command": "ors.fixSelection",
-        "title": "Örs: Seçili kodu düzelt"
-      },
-      {
-        "command": "ors.sendSelection",
-        "title": "Örs: Seçimi Örs'e gönder"
       }
     ],
     "menus": {
-      "editor/context": [
-        {
-          "command": "ors.explainSelection",
-          "when": "editorHasSelection",
-          "group": "ors@1"
-        },
-        {
-          "command": "ors.fixSelection",
-          "when": "editorHasSelection",
-          "group": "ors@2"
-        },
-        {
-          "command": "ors.sendSelection",
-          "when": "editorHasSelection",
-          "group": "ors@3"
-        }
-      ],
       "view/title": [
         {
           "command": "ors.setHost",

@@ -5,7 +5,12 @@ export type HostBoundMessage =
   | { type: "newChat" }
   | { type: "getModels" }
   | { type: "selectModel"; model: string }
-  | { type: "approvalResponse"; id: string; approved: boolean; remember?: boolean }
+  | {
+      type: "approvalResponse";
+      id: string;
+      approved: boolean;
+      remember?: boolean;
+    }
   | { type: "askUserResponse"; id: string; answer: string }
   | { type: "selectMode"; mode: AgentMode; effort?: EffortLevel }
   | { type: "setHost" }
@@ -15,8 +20,8 @@ export type HostBoundMessage =
   | { type: "renameSession"; id: string; name: string }
   | { type: "openFilePicker" }
   | { type: "getEditorContext" }
-  | { type: "openFile"; path: string; line?: number }
-  | { type: "exportChat" };
+  | { type: "manageHosts" }
+  | { type: "removeHost"; host: string };
 
 export type AgentMode = "manual" | "act" | "plan" | "auto";
 
@@ -46,7 +51,12 @@ export interface ToolStatItem {
 
 export type WebviewBoundMessage =
   | { type: "models"; models: string[]; current: string; currentHost: string }
-  | { type: "status"; state: "idle" | "thinking" | "running"; label?: string; ctxPct?: number }
+  | {
+      type: "status";
+      state: "idle" | "thinking" | "running";
+      label?: string;
+      ctxPct?: number;
+    }
   | { type: "userMessage"; text: string }
   | { type: "assistantStart" }
   | { type: "assistantToken"; text: string }
@@ -72,9 +82,21 @@ export type WebviewBoundMessage =
   | { type: "sessions"; sessions: SessionMeta[] }
   | { type: "stats"; items: ToolStatItem[] }
   | { type: "askUser"; id: string; title: string; options: string[] }
-  | { type: "fileAttached"; name: string; content: string; isImage?: true; dataUrl?: string }
+  | {
+      type: "fileAttached";
+      name: string;
+      content: string;
+      isImage?: true;
+      dataUrl?: string;
+    }
   | { type: "editorContext"; filename: string; content: string }
-  | { type: "prefill"; text: string };
+  | {
+      type: "serverStatus";
+      status: "online" | "offline" | "checking";
+      host: string;
+      error?: string;
+    }
+  | { type: "hosts"; hosts: string[]; current: string };
 
 export type TranscriptItem =
   | { kind: "user"; text: string }

@@ -1,360 +1,336 @@
 <div align="center">
 
-<img src="media/icon.png" width="120" alt="Örs logo" />
+<img src="media/icon.png" width="120" alt="Örs logosu" />
 
-# Örs — forge your code while the iron's hot
+# Örs — Kodu tavında dövmeye geldik
 
-**Where code gets forged.** ("Örs" is Turkish for *anvil*.) A **general-purpose agentic
-assistant** that runs on your own **local Ollama** models — reads and edits files inside
-VSCode, runs commands, searches the web, connects to remote machines, and manages your
-computer.
+**Kodun dövüldüğü yer.** Kendi **yerel Ollama** modellerinle çalışan; VSCode içinde
+dosya okuyup düzenleyebilen, komut çalıştırabilen, web'de arayabilen, uzak sunuculara
+bağlanabilen ve makineni yönetebilen **genel amaçlı agentic asistan.**
 
-_chat → tool call → see the result → continue_ — it's entirely yours:
-**no middle layer, no push to the cloud, no lock-in.**
+_sohbet → araç çağrısı → sonucu gör → devam_ — tamamen senindir:
+**ara katman yok, buluta zorlama yok, kilitlenme yok.**
 
 </div>
 
 ---
 
-## Screenshots
+## Ekran Görüntüleri
 
-| Welcome | Agent session | Approval gate |
+| Karşılama | Ajan oturumu | Onay kapısı |
 |:---:|:---:|:---:|
-| ![Welcome screen](media/screenshots/01-welcome.png) | ![Agent session](media/screenshots/02-session.png) | ![Diff approval](media/screenshots/03-approval.png) |
-| Local model + persistent memory | Read → edit → run loop, live tool cards | Every write shown as a diff for approval |
+| ![Karşılama ekranı](media/screenshots/01-welcome.png) | ![Ajan oturumu](media/screenshots/02-session.png) | ![Diff onayı](media/screenshots/03-approval.png) |
+| Yerel model + kalıcı hafıza | Oku → düzenle → çalıştır döngüsü, canlı araç kartları | Her yazma diff önizlemesiyle onaya sunulur |
 
 ---
 
-## Why?
+## Neden?
 
-### What's wrong with the existing tools
+### Mevcut araçların sorunu
 
-The popular AI coding extensions (Cline, Continue, Copilot, etc.) nominally "support"
-local models. But that support is mostly non-functional — and the issue isn't just that
-they nudge you toward the cloud. The pattern is sharper: the local mode is left genuinely
-too broken to use. This isn't inexperience or a one-off gap; it's an industry-wide choice.
-Including the ones that call themselves "open source," these tools' revenue depends on
-cloud API usage — a local mode that works well eats their own revenue. So local mode is
-made to *look* supported while being kept unusable; the checkbox is ticked, the experience
-is broken. Here's how that brokenness is built:
+Piyasadaki popüler AI kodlama uzantıları (Cline, Continue, Copilot vb.) görünürde
+yerel modeli "destekler." Ama bu destek çoğunlukla işlevsel değil — ve mesele yalnızca
+seni buluta "yönlendirmeleri" de değil. Kalıp daha keskin: yerel mod, gerçekten
+kullanılamayacak kadar kötü bırakılıyor. Bu bir tecrübesizlik ya da tekil bir eksiklik
+değil; sektörel bir tercih. "Açık kaynak" olduğunu iddia edenler de dahil, bu araçların
+gelir modeli bulut API kullanımına bağlı — iyi çalışan bir yerel mod, kendi gelirlerini
+yer. Sonuçta yerel mod "destekleniyormuş" gibi yapılır ama çalıştırılamaz halde tutulur;
+kutucuk işaretlidir, deneyim kırıktır. Aşağıdakiler o kırıklığın nasıl inşa edildiğidir:
 
-**Broken context management:**
-Cline stuffs the project's entire file tree, every open file, and the whole conversation
-history into the context for a single request. With cloud models this looks like "better
-results" because there's a 200K-token window; on a local 7B model most of that context is
-meaningless noise, the model loses its way, and quality collapses. The same extension works
-well with GPT-4 and badly with Qwen — the difference isn't the model, it's the context
-design.
+**Bağlam yönetimi bozuk:**
+Cline bir istek için projenin tüm dosya ağacını, her açık dosyayı ve geçmiş konuşmayı
+context'e doldurur. Bulut modellerinde bu "daha iyi sonuç" gibi görünür çünkü 200K token
+penceresi var; yerel bir 7B modelde ise bağlamın büyük kısmı anlamsız gürültüdür, model
+yönünü kaybeder ve kaliteli çıktı üretemez. Aynı uzantı GPT-4 ile iyi çalışır, Qwen ile
+kötü — fark modelden değil, bağlam tasarımından kaynaklanıyor.
 
-**Tool-calling tied to the OpenAI format:**
-Most tools do tool-calling via the `/v1/chat/completions` OpenAI format. You're forced to
-run Ollama in "OpenAI-compatible" mode (`/v1` endpoint), where the proxy layer swallows
-errors silently, streaming is inconsistent, and tool-call formats come back mismatched. You
-spend hours debugging "why doesn't this work" with a local model.
+**Tool-calling OpenAI formatına bağlı:**
+Çoğu araç tool-calling'i `/v1/chat/completions` OpenAI formatıyla yapar. Ollama'yı
+"OpenAI uyumlu" modda kullanmak zorunda kalırsın (`/v1` endpoint), bu proxy katmanı
+hataları sessizce yutar, streaming tutarsız çalışır, araç çağrı formatları uyumsuz gelir.
+Yerel modelle saatlerce "neden çalışmıyor" diye debug edersin.
 
-**`num_ctx` never gets set:**
-Ollama starts with a small context window by default. If a tool doesn't set it, Ollama
-silently truncates — the model runs on half a conversation and reports no error. Cline and
-Continue leave this to the user; most people can't figure out why the model is "acting
-dumb."
+**`num_ctx` ayarlanmaz:**
+Ollama varsayılan olarak düşük bir bağlam penceresiyle açılır. Araç bunu ayarlamazsa
+Ollama sessizce kırpar — model yarım konuşmayla çalışır, hiçbir hata vermez. Cline ve
+Continue bunu kullanıcıya bırakır; çoğu kullanıcı neden modelin "salaklık yaptığını"
+anlayamaz.
 
-**Weak or missing approval:**
-With cloud models, "let the agent do everything automatically" is reasonable because you
-trust the model's quality. A local 7B model sometimes overwrites a file with entirely wrong
-content, or runs the wrong command — but the tool applies it directly, without a preview.
-You only notice the mistake afterward.
+**Onay mekanizması zayıf veya yok:**
+Bulut modelleriyle çalışırken "ajan her şeyi otomatik yapsın" mantıklıdır çünkü modelin
+kalitesine güvenirsin. Yerel 7B model bazen dosyayı tamamen yanlış içerikle üzerine yazar
+ya da yanlış komutu çalıştırır — ama araç bunu önizlemeden direkt uygular. Hatayı ancak
+sonra fark edersin.
 
-**"Open source" ≠ local-first:**
-Some of these tools genuinely are open source (Cline, Continue, Aider, Roo Code). But the
-source being open doesn't mean the design is built for local models. The same pattern
-holds: the architecture was set up for cloud frontier models from the start, and the local
-model is an "option" bolted on later. Even Aider's docs recommend frontier models for best
-results and build their leaderboard around them; local models sit at the bottom of the
-list. Cline's forks (Roo Code, etc.) inherit the same context-stuffing architecture. The
-result: you can read the code, but the tool still pushes you to the cloud. Open source is no
-excuse for a bad local experience.
+**"Açık kaynak" ≠ yerel öncelikli:**
+Bu araçların bir kısmı gerçekten açık kaynak (Cline, Continue, Aider, Roo Code gibi). Ama
+kaynağın açık olması, tasarımın yerel modele göre yapıldığı anlamına gelmiyor. Aynı kalıp
+burada da geçerli: mimari en baştan bulut frontier modelleri için kurulmuş,
+yerel model sonradan eklenen bir "seçenek." Aider dokümantasyonu bile en iyi sonuç için
+frontier modelleri önerir, kendi leaderboard'unu onların üstüne kurar; yerel modeller
+listenin dibindedir. Cline'ın forkları (Roo Code vb.) aynı bağlam-doldurma mimarisini
+miras alır. Sonuç: kodu okuyabilirsin ama araç yine seni buluta iter. Açık kaynak, kötü
+yerel deneyimin mazereti değildir.
 
-**Lock-in model:**
-Cline's company (a cloud-API partner) and the company behind Continue make money from
-subscriptions or API usage. Local-model support conflicts with these companies' core
-revenue model. The tool "works" but doesn't work well — which eventually steers you back to
-cloud frontier models.
+**Kilitlenme modeli:**
+Cline'ın şirketi (bir bulut API ortağı) ve Continue'nun arkasındaki şirket abonelik veya
+API kullanımından para kazanıyor. Yerel model desteği bu şirketlerin asıl gelir modeliyle
+çelişiyor. Araç "çalışıyor" ama iyi çalışmıyor; bu da seni sonunda bulut frontier
+modellerine yönlendiriyor.
 
-### How Örs is different
+### Örs nasıl farklı
 
-Örs was designed for local models from the start. Cloud support isn't something to "add on"
-later; on the contrary, you'd have to modify Örs to use a cloud model.
+Örs, başından yerel model için tasarlandı. Bulut desteği sonradan "eklenebilir" bir şey
+değil; tersine, bulut modelini kullanmak için Örs'ü değiştirmen gerekir.
 
-- **Native Ollama API** (`/api/chat`): no proxy, no format conversion, no OpenAI
-  compatibility. It talks directly to Ollama's own tool-calling protocol.
-- **`num_ctx` is sent explicitly**: `options.num_ctx` is set on every request, so Ollama
-  can't truncate silently.
-- **Deliberately restricted context**: only the active file and selection are added to the
-  system prompt — not the whole project. Signal-to-noise ratio matters for a 7B model.
-- **Every write and command previewed**: a diff viewer or the command text is shown;
-  nothing is applied without approval. You can stop the model's mistake before you see it.
-- **Weak-model fallback**: if the model can't produce tool calls in JSON, a separate parser
-  extracts the tool call from free text. Weaker models work too.
-- **Zero lock-in**: MIT-licensed, running on your own machine, with your own model, with no
-  internet connection.
-
----
-
-## Tools
-
-| Tool | Description | Approval |
-|------|-------------|----------|
-| `read_file` | Read a file (with offset/limit for large files) | automatic |
-| `write_file` | Create / overwrite a file | approval (diff) |
-| `edit_file` | Section edit (unique text match) | approval (diff) |
-| `list_dir` | List a directory | automatic |
-| `search` | Grep across files | automatic |
-| `glob` | Filename / path pattern matching | automatic |
-| `get_diagnostics` | VSCode lint/compiler errors and warnings | automatic |
-| `run_command` | Run a shell command (PowerShell/sh) | approval |
-| `run_in_terminal` | Run a visible command in VSCode's integrated terminal | approval |
-| `start_process` | Start a long-running background process | approval |
-| `check_process` | Read a background process's output/status | automatic |
-| `stop_process` | Stop a background process | approval |
-| `ssh_run` | Run a command on a remote machine over SSH | approval |
-| `web_search` | Web search via DuckDuckGo (8 results) | automatic |
-| `web_fetch` | Fetch a web page and convert it to plain text | automatic |
-| `describe_image` | Read/describe an image file with a vision model | automatic |
-| `read_pdf` | Extract text from a PDF file | automatic |
-| `spawn_agent` | Run a subtask in an independent sub-agent | approval |
-| `connect_mcp` | Connect to an MCP server | approval |
-| `call_mcp_tool` | Call a tool on a connected MCP server | approval |
-| `schedule_task` | Schedule a task (cron / delay) | approval |
-| `list_scheduled_tasks` | List active scheduled tasks | automatic |
-| `cancel_task` | Cancel a scheduled task | approval |
-| `ask_user` | Ask the user a structured question from within the agent loop | automatic |
-| `manage_memory` | Add/read/delete notes that persist across sessions | automatic |
-| `manage_todos` | Manage a task list (shown in the panel) | automatic |
-
-**The approval policy** is customizable via settings: `ors.autoApprove`,
-`ors.commandAllowlist`, `ors.commandDenylist`.
+- **Native Ollama API** (`/api/chat`): proxy yok, format dönüşümü yok, OpenAI uyumu yok.
+  Ollama'nın kendi tool-calling protokolüyle doğrudan konuşur.
+- **`num_ctx` açıkça gönderilir**: her istekte `options.num_ctx` set edilir, Ollama
+  sessizce kırpamaz.
+- **Kasıtlı kısıtlı bağlam**: sisteme yalnızca aktif dosya ve seçim eklenir; projenin
+  tamamı değil. 7B model için sinyal/gürültü oranı önemlidir.
+- **Her yazma ve komut önizlemede**: diff görüntüleyici veya komut metni, onay olmadan
+  hiçbir şey uygulanmaz. Modelin hatasını görmeden önce durdurabilirsin.
+- **Zayıf model fallback**: model tool-calling'i JSON formatında üretemezse metin içinden
+  araç çağrısını çıkaran ayrı bir parser devreye girer. Daha zayıf modeller de çalışır.
+- **Sıfır kilitlenme**: MIT lisanslı, kendi makinanda, kendi modelinle, internet bağlantısı
+  olmadan çalışır.
 
 ---
 
-## Features
+## Araçlar
 
-**Agentic loop**
-Read → call a tool → see the result → continue. Native tool-calling, plus a text-format
-fallback for weak models (including JSON repair). Repeating loops and consecutive failures
-are detected and stopped automatically.
+| Araç | Açıklama | Onay |
+|------|----------|------|
+| `read_file` | Dosya okuma (offset/limit ile büyük dosyalar için) | otomatik |
+| `write_file` | Dosya oluşturma / üzerine yazma | onay (diff) |
+| `edit_file` | Bölüm düzenleme (benzersiz metin eşleşmesi) | onay (diff) |
+| `list_dir` | Dizin listeleme | otomatik |
+| `search` | Dosyalarda grep | otomatik |
+| `glob` | Dosya adı / yol deseni eşleştirme | otomatik |
+| `get_diagnostics` | VSCode lint/derleyici hataları ve uyarıları | otomatik |
+| `run_command` | Kabuk komutu çalıştırma (PowerShell/sh) | onay |
+| `run_in_terminal` | VSCode entegre terminalde görünür komut çalıştırma | onay |
+| `start_process` | Arka planda uzun süren süreç başlatma | onay |
+| `check_process` | Arka plan sürecinin çıktısını/durumunu okuma | otomatik |
+| `stop_process` | Arka plan sürecini durdurma | onay |
+| `ssh_run` | Uzak makinede SSH ile komut çalıştırma | onay |
+| `web_search` | DuckDuckGo ile web araması (8 sonuç) | otomatik |
+| `web_fetch` | Web sayfasını çekip düz metne çevirme | otomatik |
+| `describe_image` | Resim dosyasını vision modeliyle oku/açıkla | otomatik |
+| `read_pdf` | PDF dosyasından metin çıkarma | otomatik |
+| `spawn_agent` | Alt-görevi bağımsız alt-ajanla çalıştırma | onay |
+| `connect_mcp` | MCP sunucusuna bağlan | onay |
+| `call_mcp_tool` | Bağlı MCP sunucusundaki aracı çağır | onay |
+| `schedule_task` | Görev zamanla (cron / delay) | onay |
+| `list_scheduled_tasks` | Aktif zamanlanmış görevleri listele | otomatik |
+| `cancel_task` | Zamanlanmış görevi iptal et | onay |
+| `ask_user` | Ajan döngüsü içinden kullanıcıya yapılandırılmış soru sor | otomatik |
+| `manage_memory` | Oturumlar arası kalıcı not ekleme/okuma/silme | otomatik |
+| `manage_todos` | Görev listesi yönetimi (panelde görünür) | otomatik |
 
-**Plan / Act mode**
-In Plan mode the agent only has access to read tools, presents an implementation plan, and
-doesn't touch files. In Act mode it applies the plan. Toggle with the ⚡/📋 button in the
-panel.
+**Onay politikası** ayarlardan özelleştirilebilir: `ors.autoApprove`, `ors.commandAllowlist`,
+`ors.commandDenylist`.
 
-**Task tracking**
-For multi-step work the agent keeps a live to-do list via the `manage_todos` tool.
-Completed items are checked off; the list is always visible in the panel sidebar.
+---
 
-**Native diff + undo**
-File changes are presented for approval in VSCode's side-by-side diff editor. One click in
-the panel undoes all changes from the last turn (checkpoint system).
+## Özellikler
 
-**Context management**
-In a long chat, the older part is summarized by the LLM and kept within the `num_ctx`
-limit. The summary is added to the system prompt; earlier context isn't lost, only
-compressed.
+**Agentic döngü**
+Oku → araç çağır → sonucu gör → devam. Native tool-calling ve zayıf modeller için
+metin-format fallback (JSON onarımı dahil). Tekrarlayan döngüler ve ardışık başarısızlıklar
+otomatik tespit edilip durdurulur.
 
-**Editor context**
-The active file and selected code are added automatically. Use the `@relative/path` syntax
-to add other files to the context.
+**Plan / Act modu**
+Plan modunda ajan yalnızca okuma araçlarına erişir, bir uygulama planı sunar, dosya
+değiştirmez. Act modunda planı uygular. Paneldeki ⚡/📋 butonuyla geçiş.
 
-**Persistent memory**
-The `manage_memory` tool stores notes across projects; they're injected into the system
-prompt at the start of each session. Write instructions like "always use TypeScript strict
-mode in this project" once, and it always remembers.
+**Görev takibi**
+Çok adımlı işlerde ajan `manage_todos` aracıyla canlı yapılacaklar listesi tutar.
+Tamamlananlar işaretlenir; panel kenar çubuğunda her zaman görünür.
 
-**Command safety**
-Safe commands on the allowlist (`git status`, `ls`, `npm test`…) run automatically; those
-on the denylist (`rm`, `git push`, `shutdown`…) always require approval. Commands outside
-the lists are evaluated by the default approval policy.
+**Native diff + geri-al**
+Dosya değişiklikleri VSCode'un yan-yana diff editöründe onaya sunulur. Panelden tek tıkla
+son turun tüm değişiklikleri geri alınır (checkpoint sistemi).
 
-**Background processes**
-Use `start_process` to start long-running commands like `npm run dev` or `docker compose up`
-in the background. Watch the output with `check_process`, stop it with `stop_process`.
+**Bağlam yönetimi**
+Uzun sohbette eski kısım LLM ile özetlenerek `num_ctx` sınırı içinde tutulur. Özet
+sisteme eklenir; önceki bağlam kaybolmaz, yalnızca sıkıştırılır.
 
-**Remote execution over SSH**
-Run commands on other machines with `ssh_run`. Key-based authentication; no password
-prompts.
+**Editör bağlamı**
+Aktif dosya ve seçili kod otomatik eklenir. `@göreli/yol` sözdizimi ile başka dosyaları
+bağlama ekleyebilirsin.
 
-**Web tools**
-When the model wants to research a library it doesn't know, it searches DuckDuckGo with
-`web_search`, then fetches and reads the relevant docs page with `web_fetch`.
+**Kalıcı hafıza**
+`manage_memory` aracıyla projeler arası notlar saklanır; her oturumun başında sistem
+promptuna enjekte edilir. "Bu projede her zaman TypeScript strict modu kullan" gibi
+talimatları bir kez yaz, hep hatırlasın.
 
-**Multiple Ollama hosts**
-Add several Ollama servers via settings or the command palette and switch between them —
-a remote server for a powerful model, local for lightweight tasks.
+**Komut güvenliği**
+Allowlist'teki güvenli komutlar (`git status`, `ls`, `npm test`…) otomatik çalışır;
+denylist'tekiler (`rm`, `git push`, `shutdown`…) her zaman onay ister. Listelerin dışındaki
+komutlar varsayılan onay politikasına göre değerlendirilir.
+
+**Arka plan süreçleri**
+`start_process` ile `npm run dev`, `docker compose up` gibi uzun süren komutları arka
+planda başlatabilirsin. `check_process` ile çıktıyı izlersin, `stop_process` ile durdurursun.
+
+**SSH uzak çalıştırma**
+`ssh_run` ile başka makinelerde komut çalıştırabilirsin. Anahtar tabanlı kimlik doğrulama;
+şifre istemi yok.
+
+**Web araçları**
+Model bilmediği bir kütüphaneyi araştırmak isterse `web_search` ile DuckDuckGo'da arar,
+`web_fetch` ile ilgili belge sayfasını çeker ve okur.
+
+**Çoklu Ollama host**
+Ayarlar üzerinden ya da komut paletiyle birden fazla Ollama sunucusu ekleyip aralarında
+geçiş yapabilirsin. Güçlü bir model için uzaktaki sunucuya, hafif görevler için yerele geçiş.
 
 **Diagnostics**
-`get_diagnostics` reads VSCode's TypeScript/ESLint/Python errors and warnings directly. The
-agent can see and fix compiler errors before you even save the file.
+`get_diagnostics` ile VSCode'un TypeScript/ESLint/Python hata ve uyarılarını doğrudan okur.
+Dosyayı kaydetmeden önce derleyici hatalarını görebilir, düzeltebilir.
 
-**Images and PDF**
-`describe_image` reads a screenshot or diagram file with a vision model. `read_pdf` extracts
-content from text-based PDFs.
+**Görsel ve PDF**
+`describe_image` ile ekran görüntüsü veya şema dosyasını vision modeliyle okur.
+`read_pdf` ile düz metin içeren PDF'lerden içerik çıkarır.
 
-**Sub-agent**
-`spawn_agent` delegates long or divisible tasks to an independent sub-agent; the result
-returns to the main agent while the session history stays clean.
+**Alt-ajan**
+`spawn_agent` ile uzun veya bölünebilir görevleri bağımsız bir alt-ajana devreder;
+sonuç ana ajana döner, oturum geçmişi temiz kalır.
 
 **MCP (Model Context Protocol)**
-Connect to an external MCP server with `connect_mcp`, use its tools with `call_mcp_tool`.
-Extend capabilities by integrating your own or community MCP servers.
+`connect_mcp` ile harici MCP sunucusuna bağlan, `call_mcp_tool` ile araçlarını kullan.
+Kendi şirketin veya topluluk MCP sunucularını entegre ederek yetenekleri genişlet.
 
-**Scheduled tasks**
-Schedule tasks with a cron expression or delay via `schedule_task`. Track active schedules
-with `list_scheduled_tasks`, cancel with `cancel_task`.
+**Zamanlanmış görevler**
+`schedule_task` ile cron ifadesi veya gecikme süresiyle görevler planla.
+`list_scheduled_tasks` ile aktif zamanlamaları izle, `cancel_task` ile iptal et.
 
-**Asking the user**
-`ask_user` sends a structured, multiple-choice question from within the agent loop. The
-agent waits until you choose, so critical decisions are opened up for approval.
+**Kullanıcıya soru sorma**
+`ask_user` ile ajan döngüsü içinden çoklu seçenekli yapılandırılmış soru gönderir.
+Kullanıcı seçene kadar ajan bekler; böylece kritik kararlar onaya açılır.
 
-**Slash commands**
-`/test` · `/commit [note]` · `/explain [topic]` · `/fix [issue]` · `/review [focus]` · `/help`
+**Slash komutları**
+`/test` · `/commit [not]` · `/explain [konu]` · `/fix [sorun]` · `/review [odak]` · `/help`
 
 ---
 
-## Installation
-
-### From the prebuilt package (recommended)
-
-A ready-to-use **`ors.vsix`** lives at the repository root. To install:
-
-1. Download `ors.vsix` (from this repo).
-2. VSCode → **Extensions** panel → the `···` menu (top right) → **Install from VSIX…** →
-   select `ors.vsix`.
-3. `Ctrl+Shift+P` → **Developer: Reload Window**.
-4. The **Örs** icon appears in the left activity bar.
-
-> Updating: when a new `ors.vsix` arrives, **Uninstall** the current version first, then
-> reinstall (VSCode won't auto-refresh the same version).
-
-Ollama must be running as a prerequisite — see the **Prerequisite: Ollama** section below.
-
-### From source / development
+## Kurulum & Geliştirme
 
 ```bash
 npm install
-npm run compile     # development build (sourcemaps)
-npm run watch       # watch for changes + rebuild automatically
+npm run compile     # geliştirme derlemesi (sourcemap)
+npm run watch       # değişiklikleri izle + otomatik yeniden derleme
 ```
 
-Open this folder in VSCode and press **F5** → an Extension Development Host window opens.
+VSCode'da bu klasörü aç ve **F5** → Extension Development Host penceresi açılır.
+Sol activity bar'da **Örs** ikonu görünür.
 
-## Packaging
+**VSIX paketi oluşturma:**
 
 ```bash
-npm run package     # produces ors.vsix at the repo root (via vsce)
+npm run package     # ors.vsix üretir
 ```
 
-The resulting `ors.vsix` can be installed into any VSCode with the **Install from VSIX**
-step above.
+Kurulum: VSCode → Extensions → "…" → *Install from VSIX*.
 
 ---
 
-## Prerequisite: Ollama
+## Ön koşul: Ollama
 
-1. Install it from [ollama.com](https://ollama.com) (or run it on another machine on your
-   network).
-2. Pull a model with tool-calling support:
+1. [ollama.com](https://ollama.com) üzerinden kur (ya da ağdaki başka bir makinada çalıştır).
+2. Tool-calling destekli bir model çek:
    ```bash
    ollama pull qwen2.5-coder:7b
-   # or
+   # veya
    ollama pull qwen3:8b
    ```
-3. Start the server: `ollama serve` (defaults to `http://localhost:11434`).
+3. Sunucuyu başlat: `ollama serve` (varsayılan `http://localhost:11434`).
 
-If Ollama is on another machine: set **Settings → `ors.baseUrl`** to that address
-(e.g. `http://192.168.1.50:11434`), or add a host via the command palette.
-
----
-
-## Settings
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `ors.baseUrl` | `http://localhost:11434` | Active Ollama server address |
-| `ors.hosts` | `["http://localhost:11434"]` | Registered host list |
-| `ors.model` | `""` | Model name (also selectable from the panel) |
-| `ors.temperature` | `0.2` | Sampling temperature |
-| `ors.contextWindow` | `65536` | `num_ctx` — sent to Ollama on every request |
-| `ors.maxIterations` | `25` | Max tool loops per request |
-| `ors.workspaceOnly` | `false` | If `true`, the agent can't leave the workspace |
-| `ors.autoApprove` | read/search/list: `true`; write/command: `false` | Category-based auto-approval |
-| `ors.commandAllowlist` | `git status`, `ls`, `cat`, `npm test`… | Command prefixes that run without approval |
-| `ors.commandDenylist` | `rm`, `git push`, `shutdown`… | Command prefixes that always require approval |
-
-**`ors.workspaceOnly` note (security):** The default is `false`, meaning Örs runs as a
-**general machine agent** and can reach anywhere on disk via absolute paths or `..`. This is
-a deliberate choice (server management, multi-repo workflows). To confine the agent to the
-open project, set it to `true` — then all file tools and `git_run` can't leave the root
-directory (symlink escape is blocked too). If you're running an untrusted model or working
-on a sensitive machine, `true` is recommended. In all cases, writes and commands are subject
-to the approval gate.
-
-**`ors.contextWindow` note:** Ollama starts with a small window by default and silently
-truncates when it's exceeded. Örs sends `65536` by default (for larger models). Set this to
-a value the model can actually handle — if you're constrained on memory/VRAM, lower it to
-`32768` or `16384`. Whatever the value, it's sent as `options.num_ctx` on every request, so
-Ollama can't truncate silently.
+Ollama başka makinadaysa: **Ayarlar → `ors.baseUrl`** değerini o adrese ayarla
+(ör. `http://192.168.1.50:11434`) veya komut paleti üzerinden host ekle.
 
 ---
 
-## Recommended models
+## Ayarlar
 
-Local models with strong tool-calling support:
+| Ayar | Varsayılan | Açıklama |
+|------|-----------|----------|
+| `ors.baseUrl` | `http://localhost:11434` | Aktif Ollama sunucu adresi |
+| `ors.hosts` | `["http://localhost:11434"]` | Kayıtlı host listesi |
+| `ors.model` | `""` | Model adı (panelden de seçilir) |
+| `ors.temperature` | `0.2` | Örnekleme sıcaklığı |
+| `ors.contextWindow` | `65536` | `num_ctx` — her istekte Ollama'ya gönderilir |
+| `ors.maxIterations` | `25` | Tek istekte maksimum araç döngüsü |
+| `ors.workspaceOnly` | `false` | `true` ise ajan workspace dışına çıkamaz |
+| `ors.autoApprove` | read/search/list: `true`; write/command: `false` | Kategori bazlı otomatik onay |
+| `ors.commandAllowlist` | `git status`, `ls`, `cat`, `npm test`… | Onaysız çalışacak komut önekleri |
+| `ors.commandDenylist` | `rm`, `git push`, `shutdown`… | Her zaman onay isteyen komut önekleri |
 
-| Model | Size | Note |
-|-------|------|------|
-| `qwen2.5-coder:7b` | ~5 GB | Most stable on coding tasks |
-| `qwen2.5-coder:14b` | ~10 GB | Better reasoning, needs more RAM |
-| `qwen3:8b` | ~6 GB | General purpose, strong tool-calling |
-| `llama3.1:8b` | ~5 GB | Balanced; good on non-coding tasks |
-| `mistral-small` | ~12 GB | Reliable at following instructions |
+**`ors.workspaceOnly` notu (güvenlik):** Varsayılan `false`, yani Örs **genel makine
+ajanı** olarak çalışır ve mutlak yol / `..` ile diskin her yerine erişebilir. Bu bilinçli
+bir seçimdir (sunucu yönetimi, çok-repo iş akışları). Ajanı yalnızca açık projeyle
+sınırlamak istersen `true` yap — o zaman tüm dosya araçları ve `git_run` kök dizin dışına
+çıkamaz (symlink kaçışı dahil engellenir). Güvenilmeyen bir modelle veya hassas bir makinede
+çalışıyorsan `true` önerilir. Her durumda yazma ve komutlar onay kapısına tabidir.
 
-**Note:** use the `instruct` or `coder` variants, not the `base` models. Base models don't
-recognize the instruction format and can't produce tool calls.
-
-A small context window is the most common source of the "why doesn't this work" question —
-keep `contextWindow` at least `16384` (default `65536`; `32768` if memory is tight).
+**`ors.contextWindow` notu:** Ollama varsayılan olarak düşük bir pencereyle başlar ve
+aşıldığında sessizce kırpar. Örs varsayılan olarak `65536` gönderir (büyük modeller için).
+Bu ayarı modelin gerçekten kaldırabileceği değere set et — bellek/VRAM kısıtı varsa
+`32768` veya `16384`'e düşür. Değer ne olursa olsun her istekte `options.num_ctx` olarak
+gönderilir, yani Ollama sessizce kırpamaz.
 
 ---
 
-## Architecture
+## Önerilen modeller
+
+Tool-calling desteği güçlü yerel modeller:
+
+| Model | Boyut | Not |
+|-------|-------|-----|
+| `qwen2.5-coder:7b` | ~5 GB | Kodlama görevlerinde en kararlı |
+| `qwen2.5-coder:14b` | ~10 GB | Daha iyi akıl yürütme, daha fazla RAM gerektirir |
+| `qwen3:8b` | ~6 GB | Genel amaçlı, tool-calling güçlü |
+| `llama3.1:8b` | ~5 GB | Dengeli; kodlama dışı görevlerde iyi |
+| `mistral-small` | ~12 GB | Talimat takibinde güvenilir |
+
+**Dikkat:** `base` modelleri değil, `instruct` veya `coder` varyantlarını kullan. Base
+modeller talimat formatını tanımaz, tool çağrıları üretemez.
+
+Küçük bağlam penceresi en yaygın "neden çalışmıyor" sorusunun kaynağıdır — `contextWindow`
+ayarını en az `16384` tut (varsayılan `65536`; bellek kısıtı varsa `32768`).
+
+---
+
+## Mimari
 
 ```
 src/
-  llm/        LLMClient interface + OllamaClient (stream + native tool-calling)
-  tools/      Tool interface + registry + tools + workspace security jail (optional)
+  llm/        LLMClient arayüzü + OllamaClient (stream + native tool-calling)
+  tools/      Tool arayüzü + registry + araçlar + workspace güvenlik hapsi (opsiyonel)
   services/   ProcessManager · MemoryStore · TaskScheduler · MCPClient · ToolStats
-  agent/      Agent loop + system prompt + context management + fallback parser
-  webview/    WebviewViewProvider (UI bridge) + editor context + slash + native diff
-  shared/     Typed host↔webview message contract
-  edit/       Checkpoint system (undo)
-  extension.ts  composition root — all dependencies are wired here
+  agent/      Ajan döngüsü + sistem promptu + bağlam yönetimi + fallback parser
+  webview/    WebviewViewProvider (UI köprüsü) + editör bağlamı + slash + native diff
+  shared/     Host↔webview tipli mesaj sözleşmesi
+  edit/       Checkpoint sistemi (geri-al)
+  extension.ts  composition root — tüm bağımlılıklar burada bağlanır
 media/
-  main.js     Webview client code (vanilla JS)
-  style.css   Automatic theming via VSCode theme variables
+  main.js     Webview istemci kodu (vanilla JS)
+  style.css   VSCode tema değişkenleriyle otomatik tema
 ```
 
-Each layer depends only on the **interface** of the one below it. To swap Ollama for another
-provider, you only need to implement the `LLMClient` interface; agent, tools, and webview
-stay unchanged.
+Her katman yalnızca alttakinin **arayüzüne** bağlıdır. Ollama'yı başka bir sağlayıcıyla
+değiştirmek için yalnızca `LLMClient` arayüzünü implemente etmen yeter; agent, tools,
+webview hiçbiri değişmez.
 
 ---
 
-## License
+## Lisans
 
 MIT.
 
-## Icons
+## Simgeler
 
-- Welcome/wordmark anvil icon: [Lucide](https://lucide.dev) (ISC).
-- Welcome mascot and the "working" indicator (anvil+hammer): "anvil-impact" — Lorc,
-  [game-icons.net](https://game-icons.net), [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/).
+- Karşılama/wordmark örs simgesi: [Lucide](https://lucide.dev) (ISC).
+- Karşılama mascotu ve "çalışıyor" göstergesi (örs+çekiç): "anvil-impact" — Lorc, [game-icons.net](https://game-icons.net), [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/).
